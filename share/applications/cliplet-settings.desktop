@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Cliplet Settings
+Comment=Configure clipboard manager settings and preferences
+Icon=cliplet
+Exec=cliplet-settings
+Categories=Settings;Utility;System;
+Keywords=clipboard;settings;preferences;manager;
+StartupNotify=true

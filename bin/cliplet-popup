@@ -1,0 +1,116 @@
+#!/usr/bin/env python3
+"""
+Cliplet - Manual Popup Trigger
+
+This script can be called directly to show the clipboard popup.
+Perfect for manual keyboard shortcut setup through system settings.
+"""
+
+import sys
+import os
+import signal
+import time
+from pathlib import Path
+
+# Add the source directory to Python path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+
+try:
+    import gi
+    gi.require_version('Gtk', '4.0')
+    from gi.repository import Gtk, GLib, Gio
+    
+    from cliplet.core.clipboard import ClipboardHistory
+    from cliplet.ui.popup import ClipboardPopup
+    from cliplet.config import ConfigManager
+    from cliplet.utils.logging import setup_logging
+    
+except ImportError as e:
+    print(f"Error: Failed to import required modules: {e}", file=sys.stderr)
+    print("Please ensure the application is properly installed.", file=sys.stderr)
+    sys.exit(1)
+
+def show_popup():
+    """Show the clipboard popup window"""
+    try:
+        # Setup logging
+        setup_logging(level='WARNING', console=False)
+        
+        # Load configuration
+        config = ConfigManager()
+        
+        # Initialize clipboard history
+        history = ClipboardHistory(config)
+        
+        # Create and show popup
+        popup = ClipboardPopup(history, config)
+        popup.show_at_cursor()
+        
+        # Set up signal handlers for graceful shutdown
+        def signal_handler(signum, frame):
+            popup.hide()
+            app.quit()
+            
+        signal.signal(signal.SIGINT, signal_handler)
+        signal.signal(signal.SIGTERM, signal_handler)
+        
+        # Create a simple application to handle the popup
+        app = Gtk.Application(application_id="org.cliplet.app.popup")
+        
+        def on_activate(app):
+            # Window is already shown, just keep app running
+            pass
+        
+        app.connect('activate', on_activate)
+        
+        # Auto-quit after popup is hidden (with small delay)
+        def check_popup():
+            if not popup.get_visible():
+                GLib.timeout_add(100, lambda: app.quit())
+                return False
+            return True
+        
+        GLib.timeout_add(500, check_popup)
+        
+        # Run the application
+        app.run([])
+        
+    except Exception as e:
+        print(f"Error showing clipboard popup: {e}", file=sys.stderr)
+        sys.exit(1)
+
+def main():
+    """Main entry point"""
+    import argparse
+    
+    parser = argparse.ArgumentParser(
+        description="Show Cliplet popup",
+        prog="cliplet-popup"
+    )
+    
+    parser.add_argument(
+        '--version', '-v',
+        action='version',
+        version='%(prog)s 1.0.0'
+    )
+    
+    parser.add_argument(
+        '--show-path',
+        action='store_true',
+        help="Show the full path to this executable for keyboard shortcut setup"
+    )
+    
+    args = parser.parse_args()
+    
+    if args.show_path:
+        script_path = os.path.abspath(__file__)
+        print(f"Executable path: {script_path}")
+        print(f"Use this path in your keyboard shortcut settings:")
+        print(f"Command: {script_path}")
+        return
+    
+    # Show the popup
+    show_popup()
+
+if __name__ == "__main__":
+    main()

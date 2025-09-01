@@ -1,0 +1,33 @@
+[Unit]
+Description=Cliplet Daemon
+Documentation=man:clipletd(1)
+After=graphical-session.target
+Wants=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/clipletd
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=10
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/.config/cliplet %h/.local/share/cliplet %h/.cache/cliplet
+
+# Resource limits
+MemoryMax=200M
+CPUQuota=50%
+
+# Environment
+Environment=DISPLAY=:0
+Environment=XDG_RUNTIME_DIR=%t
+Environment=XDG_CONFIG_HOME=%h/.config
+Environment=XDG_DATA_HOME=%h/.local/share
+
+[Install]
+WantedBy=default.target
