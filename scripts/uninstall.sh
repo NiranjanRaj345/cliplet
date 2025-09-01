@@ -6,7 +6,7 @@ set -e  # Exit on any error
 
 # Configuration
 APP_NAME="cliplet"
-PREFIX="${PREFIX:-/usr/local}"
+PREFIX="${PREFIX:-$HOME/.local}"
 
 # Paths
 BIN_DIR="$PREFIX/bin"

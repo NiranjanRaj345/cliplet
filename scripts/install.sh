@@ -7,7 +7,7 @@ set -e  # Exit on any error
 # Configuration
 APP_NAME="cliplet"
 VERSION="1.0.0"
-PREFIX="${PREFIX:-/usr/local}"
+PREFIX="${PREFIX:-$HOME/.local}"
 INSTALL_USER="${INSTALL_USER:-$USER}"
 
 # Paths
@@ -45,12 +45,7 @@ log_error() {
 
 # Check if running as root
 check_root() {
-    if [[ $EUID -eq 0 ]] && [[ "$PREFIX" == "/usr/local" ]]; then
-        log_warning "Running as root. Installing system-wide to $PREFIX"
-        SYSTEMD_USER_DIR="/etc/systemd/user"
-    else
-        log_info "Installing for user: $INSTALL_USER"
-    fi
+    log_info "Installing for user: $INSTALL_USER"
 }
 
 # Check dependencies

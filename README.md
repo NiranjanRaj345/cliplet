@@ -42,10 +42,10 @@ cd cliplet
 ./scripts/setup-keyboard-shortcut.sh
 ```
 
-### 2. Install System-wide
+### 2. Install for Current User (Recommended)
 ```bash
-# Install the application
-sudo ./scripts/install.sh
+# Install the application (no sudo needed)
+./scripts/install.sh
 ```
 
 ### 3. Start Using
@@ -281,7 +281,7 @@ cliplet-settings --reset
 - [`docs/API.md`](docs/API.md) - API reference
 
 ### Quick References
-- **Installation**: Run `./scripts/setup-keyboard-shortcut.sh` then `sudo ./scripts/install.sh`
+- **Installation**: Run `./scripts/setup-keyboard-shortcut.sh` then `./scripts/install.sh`
 - **Testing**: Use `./bin/cliplet-popup` to test functionality (after starting daemon)
 - **Uninstall**: Run `./scripts/uninstall.sh` for complete removal
 - **Documentation**: See [`docs/`](docs/) for complete guides
@@ -294,8 +294,8 @@ cliplet-settings --reset
 # 2. Setup keyboard shortcuts
 ./scripts/setup-keyboard-shortcut.sh
 
-# 3. Install system-wide (requires sudo)
-sudo ./scripts/install.sh
+# 3. Install for current user (no sudo needed)
+./scripts/install.sh
 
 # 4. Start daemon and test
 systemctl --user start cliplet
