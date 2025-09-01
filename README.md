@@ -35,7 +35,7 @@
 
 ### 1. Setup Keyboard Shortcuts (Interactive)
 ```bash
-git clone https://github.com/your-username/cliplet.git
+git clone https://github.com/NiranjanRaj345/cliplet.git
 cd cliplet
 
 # Start with keyboard shortcut setup
