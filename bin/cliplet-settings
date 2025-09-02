@@ -12,9 +12,10 @@ import logging
 from pathlib import Path
 
 # Add the absolute source directory to Python path for module resolution
-src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src'))
-if src_path not in sys.path:
-    sys.path.insert(0, src_path)
+# Use installed site-packages directory for module resolution
+site_packages_path = os.path.expanduser('~/.local/lib/python3/site-packages')
+if site_packages_path not in sys.path:
+    sys.path.insert(0, site_packages_path)
 
 try:
     from cliplet.config import ConfigManager
