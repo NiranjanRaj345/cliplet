@@ -44,8 +44,12 @@ class ClipboardPopup(Gtk.Window):
         """Setup window properties for popup"""
         self.set_decorated(False)  # No title bar
         self.set_resizable(False)
-        # Make popup modal so it behaves as a transient utility window
-        self.set_modal(True)
+        # Modal or windowed popup based on config
+        self.is_modal = bool(self.config.get('popup_modal', True))
+        if self.is_modal:
+            self.set_modal(True)
+        else:
+            self.set_modal(False)
         # Hide instead of destroying when closed
         try:
             self.set_hide_on_close(True)
@@ -158,12 +162,13 @@ class ClipboardPopup(Gtk.Window):
         spacer.set_hexpand(True)
         header.append(spacer)
         
-        # Close button
-        close_btn = Gtk.Button(label="×")
-        close_btn.connect('clicked', lambda x: self.hide())
-        close_btn.set_halign(Gtk.Align.END)
-        close_btn.get_style_context().add_class('close-button')
-        header.append(close_btn)
+        # Only show close button if not modal
+        if not getattr(self, "is_modal", True):
+            close_btn = Gtk.Button(label="×")
+            close_btn.connect('clicked', lambda x: self.hide())
+            close_btn.set_halign(Gtk.Align.END)
+            close_btn.get_style_context().add_class('close-button')
+            header.append(close_btn)
         
         main_box.append(header)
         
@@ -187,36 +192,74 @@ class ClipboardPopup(Gtk.Window):
         key_controller.connect('key-pressed', self._on_key_pressed)
         self.add_controller(key_controller)
         
-        # Focus controller disabled to prevent premature hiding on shortcut launch
-        # focus_controller = Gtk.EventControllerFocus()
-        # focus_controller.connect('leave', self._on_focus_out)
-        # self.add_controller(focus_controller)
+        # Hide on focus loss if modal
+        if getattr(self, "is_modal", True):
+            focus_controller = Gtk.EventControllerFocus()
+            focus_controller.connect('leave', self._on_focus_out)
+            self.add_controller(focus_controller)
     
     def show_at_cursor(self) -> None:
-        """Show popup at current cursor/mouse position"""
+        """Show popup directly under the cursor, or as close as possible."""
         try:
             logger.debug("Preparing to show popup at cursor")
-            # Wayland layer-shell (if available) otherwise legacy positioning
-            if self._maybe_setup_layer_shell():
-                self._apply_layer_shell_position()
-            else:
-                self._position_at_cursor()
+            display = Gdk.Display.get_default()
+            seat = display.get_default_seat()
+            device = seat.get_pointer()
+            x, y = None, None
+    
+            # Try to get cursor position from pointer device (Wayland/Xorg)
+            try:
+                surface = device.get_surface_at_position()
+                if surface and hasattr(surface, 'get_root_coords'):
+                    x, y = surface.get_root_coords(0, 0)
+            except Exception as e:
+                logger.debug(f"Failed to get cursor position: {e}")
+    
+            # Fallback: center of primary monitor
+            if x is None or y is None:
+                monitors = display.get_monitors()
+                if monitors and monitors.get_n_items() > 0:
+                    geometry = monitors.get_item(0).get_geometry()
+                    x = geometry.width // 2
+                    y = geometry.height // 2
+                else:
+                    x, y = 400, 300
+    
+            # Set window size
+            popup_width = self.config.get('popup_width', 400)
+            popup_height = self.config.get('popup_height', 300)
+            self.set_default_size(popup_width, popup_height)
+    
+            # Adjust position to keep popup on screen
+            if display.get_monitors().get_n_items() > 0:
+                monitor = display.get_monitors().get_item(0)
+                geometry = monitor.get_geometry()
+                if x + popup_width > geometry.x + geometry.width:
+                    x = geometry.x + geometry.width - popup_width - 20
+                if y + popup_height > geometry.y + geometry.height:
+                    y = geometry.y + geometry.height - popup_height - 20
+                x = max(geometry.x + 20, x)
+                y = max(geometry.y + 20, y)
+    
+            # Move window to calculated position
+            try:
+                self.move(x, y)
+            except Exception as e:
+                logger.debug(f"Failed to move popup: {e}")
+    
             # Prime clipboard so first item appears even if daemon just started
             self._prime_current_clipboard()
             self.refresh_items()
             logger.debug("Presenting popup window")
             self.present()
-            # Try to keep above (no-op on Wayland without layer-shell)
             try:
-                self.set_keep_above(True)  # type: ignore[attr-defined]
+                self.set_keep_above(True)
             except Exception:
                 pass
-            # Force focus to avoid immediate focus-out behaviors on some DEs
             try:
                 self.grab_focus()
             except Exception as e:
                 logger.debug(f"grab_focus failed: {e}")
-            # Auto-hide timer (enabled)
             self._reset_hide_timer()
             logger.debug(f"Popup shown. Visible={self.get_visible()}")
         except Exception as e:
@@ -477,15 +520,18 @@ class ClipboardPopup(Gtk.Window):
 
                 logger.debug(f"Selected clipboard item: {item.preview}")
 
+                # Hide immediately after copy if modal
+                if getattr(self, "is_modal", True):
+                    self.hide()
                 # Attempt paste shortly after setting clipboard, then close
                 GLib.timeout_add(80, self._paste_and_close)
         except Exception as e:
             logger.error(f"Error handling item click: {e}")
     
-    # def _on_focus_out(self, controller) -> None:
-    #     """Hide popup when focus is lost"""
-    #     # Small delay to allow click to register
-    #     GLib.timeout_add(100, self.hide)
+    def _on_focus_out(self, controller) -> None:
+        """Hide popup when focus is lost"""
+        # Small delay to allow click to register
+        GLib.timeout_add(100, self.hide)
     
     def _on_key_pressed(self, controller, keyval, keycode, state) -> bool:
         """Handle key press events"""
@@ -498,12 +544,15 @@ class ClipboardPopup(Gtk.Window):
         """Reset the auto-hide timer (re-enabled)."""
         if self.hide_timer:
             GLib.source_remove(self.hide_timer)
-        # Use configured delay, default to 30s
-        try:
-            delay = int(self.config.get('auto_hide_delay', 30))
-        except Exception:
-            delay = 30
-        delay = max(3, min(delay, 300))
+        # Use 15s fallback for modal, else config value
+        if getattr(self, "is_modal", True):
+            delay = 15
+        else:
+            try:
+                delay = int(self.config.get('auto_hide_delay', 30))
+            except Exception:
+                delay = 30
+            delay = max(3, min(delay, 300))
         self.hide_timer = GLib.timeout_add_seconds(delay, self.hide)
     
     def hide(self) -> bool:

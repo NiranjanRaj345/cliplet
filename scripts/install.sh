@@ -6,7 +6,7 @@ set -e  # Exit on any error
 
 # Configuration
 APP_NAME="cliplet"
-VERSION="1.0.0"
+VERSION="1.0.1"
 PREFIX="${PREFIX:-$HOME/.local}"
 INSTALL_USER="${INSTALL_USER:-$USER}"
 
@@ -53,6 +53,7 @@ check_dependencies() {
     log_info "Checking dependencies..."
     
     local missing_deps=()
+    local install_deps=()
     
     # Check Python 3
     if ! command -v python3 &> /dev/null; then
@@ -67,7 +68,28 @@ check_dependencies() {
         log_warning "libadwaita not found - theming may not work properly"
         log_warning "Install with: sudo dnf install libadwaita-devel (Fedora/RHEL) or sudo apt install libadwaita-1-dev (Ubuntu/Debian)"
     fi
-    
+
+    # Mandatory autopaste dependencies
+    if ! command -v xdotool &> /dev/null; then
+        install_deps+=("xdotool")
+    fi
+    if ! command -v wtype &> /dev/null; then
+        install_deps+=("wtype")
+    fi
+
+    # Install missing autopaste dependencies if possible
+    if [[ ${#install_deps[@]} -gt 0 ]]; then
+        log_info "Installing autopaste dependencies: ${install_deps[*]}"
+        if command -v apt &> /dev/null; then
+            sudo apt update
+            sudo apt install -y ${install_deps[*]}
+        elif command -v dnf &> /dev/null; then
+            sudo dnf install -y ${install_deps[*]}
+        else
+            log_warning "Could not auto-install dependencies. Please install manually: ${install_deps[*]}"
+        fi
+    fi
+
     if [[ ${#missing_deps[@]} -gt 0 ]]; then
         log_error "Missing dependencies: ${missing_deps[*]}"
         log_error "Install with: sudo dnf install ${missing_deps[*]} (or sudo apt install ${missing_deps[*]} on Ubuntu-based systems)"

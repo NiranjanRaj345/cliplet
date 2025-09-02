@@ -7,6 +7,7 @@ DEFAULT_CONFIG = {
     'popup_items_visible': 8,
     'popup_position': 'cursor',  # 'cursor', 'center', 'fixed'
     'popup_transparency': 0.95,
+    'popup_modal': True,  # True = modal overlay, False = regular window
     
     # History management
     'max_history_items': 25,
@@ -27,7 +28,7 @@ DEFAULT_CONFIG = {
     'start_on_login': False,
     
     # UI preferences
-    'theme': 'system',  # 'system', 'light', 'dark'
+    'theme': 'system',  # 'system' = GTK default, 'light', 'dark'
     'font_size': 12,
     'show_timestamps': True,
     'show_preview': True
@@ -56,6 +57,10 @@ CONFIG_SCHEMA = {
         'type': str,
         'choices': ['cursor', 'center', 'fixed'],
         'description': 'Where to position the popup window'
+    },
+    'popup_modal': {
+        'type': bool,
+        'description': 'Show popup as modal overlay (no taskbar/app switcher entry)'
     },
     'popup_transparency': {
         'type': float,

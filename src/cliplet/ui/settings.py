@@ -261,6 +261,29 @@ class SettingsWindow(Gtk.ApplicationWindow):
         items_box.append(items_label)
         items_box.append(self.items_spin)
         card.append(items_box)
+
+        # Popup modal toggle
+        modal_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        modal_label = Gtk.Label(label="Show popup as modal overlay")
+        modal_label.set_halign(Gtk.Align.START)
+        modal_label.set_hexpand(True)
+        self.modal_switch = Gtk.Switch()
+        modal_box.append(modal_label)
+        modal_box.append(self.modal_switch)
+        card.append(modal_box)
+
+        # Theme preference toggle
+        theme_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        theme_label = Gtk.Label(label="Theme preference")
+        theme_label.set_halign(Gtk.Align.START)
+        theme_label.set_hexpand(True)
+        self.theme_combo = Gtk.ComboBoxText()
+        self.theme_combo.append_text("GTK Default")
+        self.theme_combo.append_text("Light")
+        self.theme_combo.append_text("Dark")
+        theme_box.append(theme_label)
+        theme_box.append(self.theme_combo)
+        card.append(theme_box)
         
         return group
     
@@ -363,6 +386,16 @@ class SettingsWindow(Gtk.ApplicationWindow):
         self.width_spin.set_value(self.config.get('popup_width'))
         self.height_spin.set_value(self.config.get('popup_height'))
         self.items_spin.set_value(self.config.get('popup_items_visible'))
+        self.modal_switch.set_active(bool(self.config.get('popup_modal', True)))
+        theme_pref = self.config.get('theme', 'system')
+        if theme_pref == 'system':
+            self.theme_combo.set_active(0)
+        elif theme_pref == 'light':
+            self.theme_combo.set_active(1)
+        elif theme_pref == 'dark':
+            self.theme_combo.set_active(2)
+        else:
+            self.theme_combo.set_active(0)
         
         # History settings
         self.max_items_spin.set_value(self.config.get('max_history_items'))
@@ -383,6 +416,16 @@ class SettingsWindow(Gtk.ApplicationWindow):
         self.config.set('popup_width', int(self.width_spin.get_value()))
         self.config.set('popup_height', int(self.height_spin.get_value()))
         self.config.set('popup_items_visible', int(self.items_spin.get_value()))
+        self.config.set('popup_modal', bool(self.modal_switch.get_active()))
+        theme_idx = self.theme_combo.get_active()
+        if theme_idx == 0:
+            self.config.set('theme', 'system')
+        elif theme_idx == 1:
+            self.config.set('theme', 'light')
+        elif theme_idx == 2:
+            self.config.set('theme', 'dark')
+        else:
+            self.config.set('theme', 'system')
         
         # History settings
         self.config.set('max_history_items', int(self.max_items_spin.get_value()))

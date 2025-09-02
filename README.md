@@ -1,6 +1,6 @@
 # Cliplet - Modern Clipboard Manager for Linux
 
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/cliplet/releases)
+[![Version](https://img.shields.io/badge/version-1.0.1-blue.svg)](https://github.com/cliplet/releases)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Linux-blue.svg)](https://www.linux.org/)
 
@@ -357,7 +357,7 @@ MIT License - Open source with enterprise compatibility
 
 ---
 
-**Cliplet v1.0.0**
+**Cliplet v1.0.1**
 
 *Modern clipboard management for Linux*
 

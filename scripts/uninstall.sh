@@ -196,6 +196,16 @@ update_caches() {
     if command -v systemctl &> /dev/null; then
         systemctl --user daemon-reload 2>/dev/null || true
     fi
+
+    # Optionally remove autopaste dependencies if installed by installer
+    log_info "Checking for autopaste dependencies removal..."
+    if command -v apt &> /dev/null; then
+        sudo apt remove -y xdotool wtype || true
+    elif command -v dnf &> /dev/null; then
+        sudo dnf remove -y xdotool wtype || true
+    else
+        log_warning "Could not auto-remove dependencies. Remove manually if desired: xdotool wtype"
+    fi
     
     log_success "System caches updated"
 }

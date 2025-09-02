@@ -4,14 +4,15 @@ Cliplet - Windows-style clipboard manager for Linux
 A lightweight, Windows-like clipboard manager that runs as a background daemon
 and provides a popup overlay for clipboard history management.
 
+Copyright (c) 2025-2026 Cliplet Contributors
 Author: Cliplet Team
-License: GPL-3.0
-Version: 1.0.0
+License: MIT
+Version: 1.0.1
 """
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 __author__ = "Cliplet Team"
-__license__ = "GPL-3.0"
+__license__ = "MIT"
 __description__ = "Windows-style clipboard manager for Linux"
 
 # Package metadata

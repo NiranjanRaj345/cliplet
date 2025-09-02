@@ -157,7 +157,7 @@ Technical API reference including:
 - **Coverage**: Installation, Configuration, Troubleshooting, Development, API
 - **Length**: ~1,500 lines of detailed documentation
 - **Examples**: 50+ code samples and configurations
-- **Last Updated**: September 2025 (v1.0.0)
+- **Last Updated**: September 2025 (v1.0.1)
 
 ---
 
