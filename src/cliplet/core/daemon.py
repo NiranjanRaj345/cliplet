@@ -151,7 +151,7 @@ class ClipboardDaemon:
             
             # Update history max items
             if self.history:
-                self.history.max_items = self.config.get('max_history_items', 25)
+                self.history.max_items = int(self.config.get('max_history_items', 25))
             
             logger.info("Configuration reloaded successfully")
             

@@ -116,7 +116,7 @@ def test_config_manager_default_values():
     """Test configuration manager returns correct defaults"""
     config = ConfigManager()
     assert config.get('popup_width') == 400
-    assert config.get('max_history_items') == 50
+    assert config.get('max_history_items') == 25
 
 @patch('cliplet.config.paths.get_config_dir')
 def test_config_loading(mock_config_dir, tmp_path):

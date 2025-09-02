@@ -1,12 +1,23 @@
 """Clipboard popup window implementation"""
 
 import logging
+import os
+import shutil
+import subprocess
 from typing import Optional
 
 import gi
 gi.require_version('Gtk', '4.0')
 gi.require_version('Gdk', '4.0')
 from gi.repository import Gtk, Gdk, GLib
+
+# Optional gtk-layer-shell (for Wayland proper positioning/keep-above)
+try:
+    gi.require_version('GtkLayerShell', '0.1')
+    from gi.repository import GtkLayerShell  # type: ignore
+    _HAS_LAYER_SHELL = True
+except Exception:
+    _HAS_LAYER_SHELL = False
 
 from ..core.clipboard import ClipboardHistory, ClipboardItem
 
@@ -20,6 +31,7 @@ class ClipboardPopup(Gtk.Window):
         self.history = history
         self.config = config
         self.hide_timer: Optional[int] = None
+        self.layer_shell_ready: bool = False
         
         self.setup_window()
         self.setup_ui()
@@ -32,7 +44,13 @@ class ClipboardPopup(Gtk.Window):
         """Setup window properties for popup"""
         self.set_decorated(False)  # No title bar
         self.set_resizable(False)
-        self.set_modal(False)
+        # Make popup modal so it behaves as a transient utility window
+        self.set_modal(True)
+        # Hide instead of destroying when closed
+        try:
+            self.set_hide_on_close(True)
+        except Exception:
+            pass
         self.set_default_size(
             self.config.get('popup_width', 400),
             self.config.get('popup_height', 300)
@@ -169,22 +187,128 @@ class ClipboardPopup(Gtk.Window):
         key_controller.connect('key-pressed', self._on_key_pressed)
         self.add_controller(key_controller)
         
-        # Focus controller for detecting when window loses focus
-        focus_controller = Gtk.EventControllerFocus()
-        focus_controller.connect('leave', self._on_focus_out)
-        self.add_controller(focus_controller)
+        # Focus controller disabled to prevent premature hiding on shortcut launch
+        # focus_controller = Gtk.EventControllerFocus()
+        # focus_controller.connect('leave', self._on_focus_out)
+        # self.add_controller(focus_controller)
     
     def show_at_cursor(self) -> None:
         """Show popup at current cursor/mouse position"""
         try:
-            self._position_at_cursor()
+            logger.debug("Preparing to show popup at cursor")
+            # Wayland layer-shell (if available) otherwise legacy positioning
+            if self._maybe_setup_layer_shell():
+                self._apply_layer_shell_position()
+            else:
+                self._position_at_cursor()
+            # Prime clipboard so first item appears even if daemon just started
+            self._prime_current_clipboard()
             self.refresh_items()
+            logger.debug("Presenting popup window")
             self.present()
+            # Try to keep above (no-op on Wayland without layer-shell)
+            try:
+                self.set_keep_above(True)  # type: ignore[attr-defined]
+            except Exception:
+                pass
+            # Force focus to avoid immediate focus-out behaviors on some DEs
+            try:
+                self.grab_focus()
+            except Exception as e:
+                logger.debug(f"grab_focus failed: {e}")
+            # Auto-hide timer (enabled)
             self._reset_hide_timer()
-            logger.debug("Popup shown at cursor")
+            logger.debug(f"Popup shown. Visible={self.get_visible()}")
         except Exception as e:
             logger.error(f"Failed to show popup at cursor: {e}")
-    
+
+    def _maybe_setup_layer_shell(self) -> bool:
+        """Initialize gtk-layer-shell on Wayland for proper positioning/keep-above."""
+        if self.layer_shell_ready:
+            return True
+        if not _HAS_LAYER_SHELL or not os.environ.get("WAYLAND_DISPLAY"):
+            return False
+        try:
+            GtkLayerShell.init_for_window(self)
+            # Top layer; no reserved space; keyboard focus to interact
+            GtkLayerShell.set_layer(self, GtkLayerShell.Layer.TOP)
+            GtkLayerShell.set_keyboard_interactivity(self, True)
+            try:
+                GtkLayerShell.set_exclusive_zone(self, 0)
+            except Exception:
+                pass
+
+            # Prefer monitor under pointer if available; fallback to primary
+            display = Gdk.Display.get_default()
+            monitor_set = False
+            try:
+                seat = display.get_default_seat()
+                device = seat.get_pointer()
+                surface = device.get_surface_at_position()
+                if surface and hasattr(display, "get_monitor_at_surface"):
+                    monitor = display.get_monitor_at_surface(surface)
+                    if monitor:
+                        GtkLayerShell.set_monitor(self, monitor)
+                        monitor_set = True
+            except Exception as e:
+                logger.debug(f"Pointer monitor detection failed: {e}")
+
+            if not monitor_set:
+                monitors = display.get_monitors()
+                if monitors and monitors.get_n_items() > 0:
+                    GtkLayerShell.set_monitor(self, monitors.get_item(0))
+
+            self.layer_shell_ready = True
+            return True
+        except Exception as e:
+            logger.debug(f"Layer shell init failed: {e}")
+            return False
+
+    def _apply_layer_shell_position(self) -> None:
+        """Center the popup on the active monitor using layer-shell margins."""
+        if not self.layer_shell_ready:
+            return
+        try:
+            # Reset anchors
+            for edge in (GtkLayerShell.Edge.TOP, GtkLayerShell.Edge.BOTTOM, GtkLayerShell.Edge.LEFT, GtkLayerShell.Edge.RIGHT):
+                GtkLayerShell.set_anchor(self, edge, False)
+
+            # Desired size
+            w = int(self.config.get('popup_width', 400))
+            h = int(self.config.get('popup_height', 300))
+
+            # Get geometry for pointer monitor if possible; otherwise primary
+            display = Gdk.Display.get_default()
+            geometry = None
+            try:
+                seat = display.get_default_seat()
+                device = seat.get_pointer()
+                surface = device.get_surface_at_position()
+                if surface and hasattr(display, "get_monitor_at_surface"):
+                    mon = display.get_monitor_at_surface(surface)
+                    if mon:
+                        geometry = mon.get_geometry()
+            except Exception as e:
+                logger.debug(f"Layer-shell geometry (pointer) failed: {e}")
+
+            if geometry is None:
+                monitors = display.get_monitors()
+                if monitors and monitors.get_n_items() > 0:
+                    geometry = monitors.get_item(0).get_geometry()
+
+            if geometry:
+                left = max(0, (geometry.width - w) // 2)
+                top = max(0, (geometry.height - h) // 2)
+            else:
+                left, top = 200, 150
+
+            GtkLayerShell.set_anchor(self, GtkLayerShell.Edge.TOP, True)
+            GtkLayerShell.set_anchor(self, GtkLayerShell.Edge.LEFT, True)
+            GtkLayerShell.set_margin(self, GtkLayerShell.Edge.LEFT, left)
+            GtkLayerShell.set_margin(self, GtkLayerShell.Edge.TOP, top)
+        except Exception as e:
+            logger.debug(f"Layer shell position failed: {e}")
+
     def _position_at_cursor(self) -> None:
         """Position popup near cursor but ensure it's fully visible"""
         display = Gdk.Display.get_default()
@@ -236,6 +360,12 @@ class ClipboardPopup(Gtk.Window):
     def refresh_items(self) -> None:
         """Refresh the clipboard items in the popup"""
         try:
+            # Always reload latest history from disk (daemon may have updated it)
+            try:
+                self.history.load_history()
+            except Exception as e:
+                logger.debug(f"History reload failed: {e}")
+
             # Clear existing items
             child = self.list_box.get_first_child()
             while child:
@@ -260,6 +390,25 @@ class ClipboardPopup(Gtk.Window):
             
         except Exception as e:
             logger.error(f"Error refreshing popup items: {e}")
+
+    def _prime_current_clipboard(self) -> None:
+        """Read current clipboard and ensure it's in history (async)."""
+        try:
+            clipboard = Gdk.Display.get_default().get_clipboard()
+            clipboard.read_text_async(None, self._on_prime_text_ready)
+        except Exception as e:
+            logger.debug(f"Prime clipboard read failed: {e}")
+
+    def _on_prime_text_ready(self, clipboard, result) -> None:
+        """Handle async clipboard read and update history/UI."""
+        try:
+            content = clipboard.read_text_finish(result)
+            if content:
+                item = self.history.add_item(content, "text")
+                if item:
+                    GLib.idle_add(self.refresh_items)
+        except Exception as e:
+            logger.debug(f"Prime clipboard finish failed: {e}")
     
     def _create_item_row(self, item: ClipboardItem, index: int) -> Gtk.ListBoxRow:
         """Create a row widget for a clipboard item"""
@@ -318,27 +467,25 @@ class ClipboardPopup(Gtk.Window):
         return row
     
     def _on_item_clicked(self, list_box, row) -> None:
-        """Handle clipboard item click - copy and hide"""
+        """Handle clipboard item click - copy then attempt paste and close"""
         try:
             if hasattr(row, 'clipboard_item'):
                 item = row.clipboard_item
-                
+
                 # Copy to clipboard
-                clipboard = Gdk.Display.get_default().get_clipboard()
-                clipboard.set_text(item.content)
-                
-                logger.debug(f"Pasted clipboard item: {item.preview}")
-                
-                # Hide popup immediately
-                self.hide()
-                
+                self._set_clipboard_text(item.content)
+
+                logger.debug(f"Selected clipboard item: {item.preview}")
+
+                # Attempt paste shortly after setting clipboard, then close
+                GLib.timeout_add(80, self._paste_and_close)
         except Exception as e:
             logger.error(f"Error handling item click: {e}")
     
-    def _on_focus_out(self, controller) -> None:
-        """Hide popup when focus is lost"""
-        # Small delay to allow click to register
-        GLib.timeout_add(100, self.hide)
+    # def _on_focus_out(self, controller) -> None:
+    #     """Hide popup when focus is lost"""
+    #     # Small delay to allow click to register
+    #     GLib.timeout_add(100, self.hide)
     
     def _on_key_pressed(self, controller, keyval, keycode, state) -> bool:
         """Handle key press events"""
@@ -348,29 +495,92 @@ class ClipboardPopup(Gtk.Window):
         return False
     
     def _reset_hide_timer(self) -> None:
-        """Reset the auto-hide timer"""
+        """Reset the auto-hide timer (re-enabled)."""
         if self.hide_timer:
             GLib.source_remove(self.hide_timer)
-        
-        # Hide after configured delay
-        delay = self.config.get('auto_hide_delay', 10)
+        # Use configured delay, default to 30s
+        try:
+            delay = int(self.config.get('auto_hide_delay', 30))
+        except Exception:
+            delay = 30
+        delay = max(3, min(delay, 300))
         self.hide_timer = GLib.timeout_add_seconds(delay, self.hide)
     
     def hide(self) -> bool:
         """Hide the popup window"""
+        import traceback
         try:
             if self.hide_timer:
                 GLib.source_remove(self.hide_timer)
                 self.hide_timer = None
-            
+
+            logger.debug("Popup hide called. Stack:\n" + "".join(traceback.format_stack()))
             super().hide()
             logger.debug("Popup hidden")
-            
+
         except Exception as e:
             logger.error(f"Error hiding popup: {e}")
-        
+
         return False  # Remove timer if called from GLib.timeout_add
-    
+
+    def _set_clipboard_text(self, text: str) -> None:
+        """Set clipboard text using GTK4 ContentProvider with CLI fallbacks."""
+        try:
+            # GTK4 way: ContentProvider
+            try:
+                fmt = Gdk.ContentFormat.new_mime_type("text/plain;charset=utf-8")
+            except Exception:
+                # Fallback to plain text if charset not accepted
+                fmt = Gdk.ContentFormat.new_mime_type("text/plain")
+            provider = Gdk.ContentProvider.new_for_bytes(fmt, GLib.Bytes.new(text.encode("utf-8")))
+            clipboard = Gdk.Display.get_default().get_clipboard()
+            clipboard.set(provider)
+            logger.debug("Clipboard set via Gdk.ContentProvider")
+            return
+        except Exception as e:
+            logger.debug(f"Gdk clipboard set failed: {e}")
+
+        # CLI fallbacks
+        try:
+            if shutil.which("wl-copy"):
+                subprocess.run(["wl-copy"], input=text.encode("utf-8"), check=False)
+                logger.debug("Clipboard set via wl-copy")
+                return
+            if shutil.which("xclip"):
+                subprocess.run(["xclip", "-selection", "clipboard"], input=text.encode("utf-8"), check=False)
+                logger.debug("Clipboard set via xclip")
+                return
+        except Exception as e:
+            logger.debug(f"CLI clipboard fallback failed: {e}")
+
+        logger.error("Failed to set clipboard text via all methods")
+
+    def _paste_and_close(self) -> bool:
+        """Try to paste into the active application if possible, then close.
+        On Wayland/Xorg, return focus first (by hiding), then emit Ctrl+V with a slight delay.
+        """
+        is_wayland = bool(os.environ.get("WAYLAND_DISPLAY"))
+
+        # Hide first to give focus back
+        try:
+            self.hide()
+        except Exception:
+            pass
+
+        try:
+            if is_wayland and shutil.which("wtype"):
+                subprocess.Popen(["bash", "-lc", "sleep 0.12; wtype -M ctrl v -m ctrl"], start_new_session=True)
+                logger.debug("Scheduled paste via wtype after hide")
+            elif shutil.which("xdotool"):
+                subprocess.Popen(["bash", "-lc", "sleep 0.08; xdotool key --clearmodifiers ctrl+v"], start_new_session=True)
+                logger.debug("Scheduled paste via xdotool after hide")
+            else:
+                logger.info("No paste tool available (wtype for Wayland or xdotool for Xorg)")
+        except Exception as e:
+            logger.debug(f"Paste scheduling failed: {e}")
+
+        return False  # one-shot timer
+
     def cleanup(self) -> None:
         """Clean up resources"""
         if self.hide_timer:

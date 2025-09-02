@@ -37,7 +37,7 @@ Edit `~/.config/cliplet/config.json`:
   "popup_items_visible": 8,
   "max_history_items": 50,
   "auto_cleanup_days": 7,
-  "auto_hide_delay": 10,
+  "auto_hide_delay": 30,
   "excluded_apps": [
     "gnome-keyring",
     "keepassxc",
@@ -58,7 +58,7 @@ Edit `~/.config/cliplet/config.json`:
 | `popup_width` | Popup window width (pixels) | 400 | 250-600 |
 | `popup_height` | Popup window height (pixels) | 300 | 200-600 |
 | `popup_items_visible` | Number of items shown | 8 | 3-15 |
-| `auto_hide_delay` | Auto-hide timeout (seconds) | 10 | 1-60 |
+| `auto_hide_delay` | Auto-hide timeout (seconds) | 30 | 3-60 |
 
 **Example:**
 ```json
@@ -253,7 +253,7 @@ WantedBy=default.target
   "popup_width": 350,
   "popup_height": 250,
   "popup_items_visible": 5,
-  "max_history_items": 20,
+  "max_history_items": 25,
   "auto_cleanup_days": 3,
   "auto_hide_delay": 5,
   "log_level": "WARNING"
@@ -266,7 +266,7 @@ WantedBy=default.target
   "popup_width": 500,
   "popup_height": 400,
   "popup_items_visible": 12,
-  "max_history_items": 100,
+  "max_history_items": 25,
   "auto_cleanup_days": 14,
   "auto_hide_delay": 20,
   "excluded_apps": [
@@ -285,7 +285,7 @@ WantedBy=default.target
 ### Privacy-Focused Setup
 ```json
 {
-  "max_history_items": 10,
+  "max_history_items": 25,
   "auto_cleanup_days": 1,
   "excluded_apps": [
     "gnome-keyring",

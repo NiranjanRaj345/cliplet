@@ -33,7 +33,7 @@ except ImportError as e:
 def show_popup():
     """Show the clipboard popup window"""
     try:
-        # Setup logging
+        # Setup logging (reduced noise for production popup)
         setup_logging(level='WARNING', console=False)
         
         # Load configuration
@@ -41,38 +41,49 @@ def show_popup():
         
         # Initialize clipboard history
         history = ClipboardHistory(config)
-        
-        # Create and show popup
-        popup = ClipboardPopup(history, config)
-        popup.show_at_cursor()
-        
+
+        # Create a simple application to handle the popup lifecycle
+        app = Gtk.Application(application_id="org.cliplet.app.popup")
+
+        def on_activate(app):
+            # Create and present the popup when the application is activated
+            if not hasattr(app, 'popup_window') or app.popup_window is None:
+                app.popup_window = ClipboardPopup(history, config)
+                # Associate window with the application to keep it alive
+                app.popup_window.set_application(app)
+                app.popup_window.show_at_cursor()
+                # Try to grab focus to prevent focus-out quirks
+                try:
+                    app.popup_window.grab_focus()
+                except Exception:
+                    pass
+                # Quit the app when the popup becomes not visible
+                def on_visibility_changed(widget, pspec):
+                    if not widget.get_visible():
+                        GLib.idle_add(app.quit)
+                app.popup_window.connect('notify::visible', on_visibility_changed)
+            else:
+                # If it already exists, refresh and present
+                app.popup_window.refresh_items()
+                app.popup_window.present()
+                try:
+                    app.popup_window.grab_focus()
+                except Exception:
+                    pass
+
+        app.connect('activate', on_activate)
+
         # Set up signal handlers for graceful shutdown
         def signal_handler(signum, frame):
-            popup.hide()
+            if hasattr(app, 'popup_window') and app.popup_window:
+                app.popup_window.hide()
             app.quit()
-            
+
         signal.signal(signal.SIGINT, signal_handler)
         signal.signal(signal.SIGTERM, signal_handler)
-        
-        # Create a simple application to handle the popup
-        app = Gtk.Application(application_id="org.cliplet.app.popup")
-        
-        def on_activate(app):
-            # Window is already shown, just keep app running
-            pass
-        
-        app.connect('activate', on_activate)
-        
-        # Auto-quit after popup is hidden (with small delay)
-        def check_popup():
-            if not popup.get_visible():
-                GLib.timeout_add(100, lambda: app.quit())
-                return False
-            return True
-        
-        GLib.timeout_add(500, check_popup)
-        
-        # Run the application
+
+        # Auto-quit handled by notify::visible handler
+        # Run the application (will trigger activate and create the popup)
         app.run([])
         
     except Exception as e:

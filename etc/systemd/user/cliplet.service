@@ -6,7 +6,7 @@ Wants=graphical-session.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/clipletd
+ExecStart=%h/.local/bin/clipletd
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
 RestartSec=5

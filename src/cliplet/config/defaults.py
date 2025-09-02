@@ -10,7 +10,7 @@ DEFAULT_CONFIG = {
     
     # History management
     'max_history_items': 25,
-    'auto_hide_delay': 10,
+    'auto_hide_delay': 30,
     'auto_cleanup_days': 7,
     'save_on_exit': True,
     

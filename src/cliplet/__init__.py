@@ -22,11 +22,11 @@ SETTINGS_NAME = "cliplet-settings"
 # Default configuration
 DEFAULT_CONFIG = {
     'hotkey': '<Super>v',
-    'max_items': 25,
+    'max_history_items': 25,
     'popup_width': 400,
     'popup_height': 300,
     'popup_items_visible': 8,
-    'auto_hide_delay': 10,
+    'auto_hide_delay': 30,
     'auto_cleanup_days': 7,
     'excluded_apps': []
 }

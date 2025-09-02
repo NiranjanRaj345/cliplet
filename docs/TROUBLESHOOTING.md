@@ -219,7 +219,7 @@ When reporting bugs, please include:
 
 # Or edit config directly
 vim ~/.config/cliplet/config.json
-# Set "max_history_items": 20
+# Set "max_history_items": 25
 ```
 
 ### Reduce CPU Usage

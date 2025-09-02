@@ -289,7 +289,7 @@ class SettingsWindow(Gtk.ApplicationWindow):
         max_items_label.set_halign(Gtk.Align.START)
         max_items_label.set_hexpand(True)
         self.max_items_spin = Gtk.SpinButton()
-        self.max_items_spin.set_range(10, 100)
+        self.max_items_spin.set_range(5, 100)
         self.max_items_spin.set_increments(5, 10)
         max_items_box.append(max_items_label)
         max_items_box.append(self.max_items_spin)
@@ -367,6 +367,10 @@ class SettingsWindow(Gtk.ApplicationWindow):
         # History settings
         self.max_items_spin.set_value(self.config.get('max_history_items'))
         self.cleanup_spin.set_value(self.config.get('auto_cleanup_days'))
+        self.items_spin.set_value(self.config.get('popup_items_visible'))
+        self.width_spin.set_value(self.config.get('popup_width'))
+        self.height_spin.set_value(self.config.get('popup_height'))
+        self.hide_spin.set_value(self.config.get('auto_hide_delay'))
         
         # Privacy settings
         excluded_apps = self.config.get('excluded_apps')
@@ -383,6 +387,10 @@ class SettingsWindow(Gtk.ApplicationWindow):
         # History settings
         self.config.set('max_history_items', int(self.max_items_spin.get_value()))
         self.config.set('auto_cleanup_days', int(self.cleanup_spin.get_value()))
+        self.config.set('popup_items_visible', int(self.items_spin.get_value()))
+        self.config.set('popup_width', int(self.width_spin.get_value()))
+        self.config.set('popup_height', int(self.height_spin.get_value()))
+        self.config.set('auto_hide_delay', int(self.hide_spin.get_value()))
         
         # Privacy settings
         buffer = self.excluded_text.get_buffer()

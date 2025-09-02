@@ -366,10 +366,10 @@ DEFAULT_CONFIG = {
     'popup_width': 400,
     'popup_height': 300,
     'popup_items_visible': 8,
-    'auto_hide_delay': 10,
+    'auto_hide_delay': 30,
     
     # History settings
-    'max_history_items': 50,
+    'max_history_items': 25,
     'auto_cleanup_days': 7,
     
     # Privacy settings

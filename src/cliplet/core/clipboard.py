@@ -2,6 +2,8 @@
 
 import json
 import logging
+import shutil
+import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Callable, Any
@@ -53,7 +55,7 @@ class ClipboardHistory:
     def __init__(self, config_manager):
         self.config = config_manager
         self.items: List[ClipboardItem] = []
-        self.max_items = self.config.get('max_items', 25)
+        self.max_items = int(self.config.get('max_history_items', 25))
         self.load_history()
     
     def load_history(self) -> None:
@@ -157,6 +159,11 @@ class ClipboardMonitor:
         """Start monitoring clipboard changes"""
         self.monitoring = True
         self.clipboard.connect('changed', self._on_clipboard_changed)
+        # Prime initial clipboard content so history isn't empty on first run
+        try:
+            self.clipboard.read_text_async(None, self._on_clipboard_text_ready)
+        except Exception as e:
+            logger.debug(f"Initial clipboard read failed: {e}")
         logger.info("Started clipboard monitoring")
     
     def stop_monitoring(self) -> None:
@@ -211,9 +218,34 @@ class ClipboardMonitor:
             logger.error(f"Error processing clipboard content: {e}")
     
     def set_clipboard_content(self, content: str) -> None:
-        """Set clipboard content programmatically"""
+        """Set clipboard content programmatically using GTK4 ContentProvider with CLI fallbacks."""
+        # Validate input
+        if not content or (isinstance(content, str) and not content.strip()):
+            return
+        # Try GTK4 provider first
         try:
-            self.clipboard.set_text(content)
-            logger.debug(f"Set clipboard content: {content[:50]}...")
+            try:
+                fmt = Gdk.ContentFormat.new_mime_type("text/plain;charset=utf-8")
+            except Exception:
+                fmt = Gdk.ContentFormat.new_mime_type("text/plain")
+            provider = Gdk.ContentProvider.new_for_bytes(fmt, GLib.Bytes.new(content.encode("utf-8")))
+            self.clipboard.set(provider)
+            logger.debug(f"Set clipboard content via Gdk.ContentProvider: {content[:50]}...")
+            return
         except Exception as e:
-            logger.error(f"Failed to set clipboard content: {e}")
+            logger.debug(f"Gdk clipboard set failed: {e}")
+
+        # CLI fallbacks
+        try:
+            if shutil.which("wl-copy"):
+                subprocess.run(["wl-copy"], input=content.encode("utf-8"), check=False)
+                logger.debug("Set clipboard content via wl-copy")
+                return
+            if shutil.which("xclip"):
+                subprocess.run(["xclip", "-selection", "clipboard"], input=content.encode("utf-8"), check=False)
+                logger.debug("Set clipboard content via xclip")
+                return
+        except Exception as e:
+            logger.debug(f"CLI clipboard fallback failed: {e}")
+
+        logger.error("Failed to set clipboard content via all methods")
